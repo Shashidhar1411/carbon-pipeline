@@ -81,3 +81,15 @@ def test_caiso_csv_parsing(monkeypatch):
     out = cp.fetch_fuel_day(None, date(2026, 6, 1))
     assert out[0]["interval_utc"] == "2026-06-01T07:00:00Z"                  # 00:00 PDT
     assert out[1]["fuels"]["Batteries"] == -100.0
+
+
+def test_fuel_names_canonical_and_negative_solar(monkeypatch):
+    from src.producers import caiso_producer as cp
+
+    class R:
+        text = "Time,Solar,Large Hydro,Natural Gas\n00:00,-64,2389,9701\n"
+
+    monkeypatch.setattr(cp, "http_get", lambda s, u, **k: R())
+    f = cp.fetch_fuel_day(None, date(2026, 9, 1))[0]["fuels"]
+    assert "Large hydro" in f and f["Solar"] == -64.0
+    assert abs(carbon_intensity(f)["renewable_share"] - 2389 / (2389 + 9701)) < 1e-12

@@ -24,7 +24,7 @@ from src.common.timeutil import iso_utc
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--start", required=True); ap.add_argument("--end", required=True)
-    ap.add_argument("--units", default="tons_per_interval", choices=["tons_per_interval", "tons_per_hour"])
+    ap.add_argument("--units", default="tons_per_hour", choices=["tons_per_interval", "tons_per_hour"])
     a = ap.parse_args()
     s, st = requests.Session(), Store()
     theirs = {}
@@ -33,13 +33,13 @@ if __name__ == "__main__":
         resp = http_get(s, f"{config.CAISO_BASE}/{d:%Y%m%d}/{config.CAISO_CO2_FILE}")
         if resp is not None:
             rows = list(csv.DictReader(io.StringIO(resp.text)))
-            col = [c for c in rows[0] if c.strip() != "Time"][0]
+            cols = [c for c in rows[0] if c and c.strip() != "Time"]
             if d.isoformat() == a.start:
-                print("using CAISO column:", col, "| sample:", rows[0])
+                print("summing CAISO CO2 columns:", cols)
             for utc, r in _parse_times(d.isoformat(), rows):
-                v = _num(r[col])
-                if v is not None:
-                    theirs[iso_utc(utc)] = v
+                vals = [x for x in (_num(r.get(c)) for c in cols) if x is not None]
+                if vals:
+                    theirs[iso_utc(utc)] = sum(vals)
         d += timedelta(days=1)
     ours = {r["interval_utc"]: r for r in st.query("SELECT interval_utc, ci, total_mw FROM " + st._t("carbon_interval"))}
     scale = 1 / 12 if a.units == "tons_per_hour" else 1      # tons/h -> tons per 5 min

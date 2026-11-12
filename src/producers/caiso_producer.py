@@ -17,6 +17,7 @@ from datetime import date, datetime, timedelta, timezone
 import requests
 
 from ..common import config
+from ..common.emissions import EMISSION_FACTORS
 from ..common.kafka_util import http_get, make_producer, publish
 from ..common.streaming_algos import RecordClassifier
 from ..common.timeutil import iso_utc, now_utc, PACIFIC
@@ -36,6 +37,9 @@ def _parse_times(day: str, rows, time_col="Time"):
         yield naive.replace(tzinfo=PACIFIC, fold=fold).astimezone(timezone.utc), r
 
 
+CANON = {k.lower(): k for k in EMISSION_FACTORS}   # e.g. "large hydro" -> "Large hydro"
+
+
 def _num(x):
     try:
         return float(x)
@@ -43,22 +47,29 @@ def _num(x):
         return None
 
 
+def day_url(d: date, filename: str) -> str:
+    """Today's file lives under /outlook/current; earlier days under /outlook/history/<yyyymmdd>."""
+    if d == now_utc().astimezone(PACIFIC).date():
+        return f"{config.CAISO_CURRENT}/{filename}?_={int(time.time())}"   # cache-buster: CAISO caches by URL
+    return f"{config.CAISO_BASE}/{d:%Y%m%d}/{filename}"
+
+
 def fetch_fuel_day(session, d: date):
-    url = f"{config.CAISO_BASE}/{d:%Y%m%d}/{config.CAISO_FUEL_FILE}"
+    url = day_url(d, config.CAISO_FUEL_FILE)
     resp = http_get(session, url)
     if resp is None:
         return []
     rows = list(csv.DictReader(io.StringIO(resp.text)))
     out = []
     for utc, r in _parse_times(d.isoformat(), rows):
-        fuels = {k.strip(): _num(v) for k, v in r.items() if k and k.strip() != "Time" and _num(v) is not None}
+        fuels = {CANON.get(k.strip().lower(), k.strip()): _num(v) for k, v in r.items() if k and k.strip() != "Time" and _num(v) is not None}
         if fuels:
             out.append({"interval_utc": iso_utc(utc), "fuels": fuels})
     return out
 
 
 def fetch_demand_day(session, d: date):
-    url = f"{config.CAISO_BASE}/{d:%Y%m%d}/{config.CAISO_DEMAND_FILE}"
+    url = day_url(d, config.CAISO_DEMAND_FILE)
     resp = http_get(session, url)
     if resp is None:
         return []

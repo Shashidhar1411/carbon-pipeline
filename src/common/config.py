@@ -4,7 +4,8 @@ from dotenv import load_dotenv
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-load_dotenv(ROOT / ".env", override=True)
+if not os.getenv("CARBON_NO_DOTENV"):
+    load_dotenv(ROOT / ".env", override=True)
 DATA_DIR = Path(os.getenv("DATA_DIR", ROOT / "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -20,7 +21,8 @@ KEY_CURRENT = "carbon:current"
 KEY_RANKING = "carbon:ranking"      # sorted set: member = hour (UTC ISO), score = forecast kg/MWh
 
 # CAISO Today's Outlook (verify these URLs in a browser once; CAISO occasionally reorganises them)
-CAISO_BASE = os.getenv("CAISO_BASE", "https://www.caiso.com/outlook/SP/History")
+CAISO_BASE = os.getenv("CAISO_BASE", "https://www.caiso.com/outlook/history")
+CAISO_CURRENT = "https://www.caiso.com/outlook/current"
 CAISO_FUEL_FILE = "fuelsource.csv"
 CAISO_DEMAND_FILE = "demand.csv"
 CAISO_CO2_FILE = os.getenv("CAISO_CO2_FILE", "co2.csv")   # used only by eval/accuracy_check.py
