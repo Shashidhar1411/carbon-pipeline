@@ -66,20 +66,28 @@ class Store:
 
     # ---- writes ----------------------------------------------------------------------------------------
     def upsert_carbon(self, rows):
-        """Idempotent: a revised interval replaces the earlier row (matched on interval_utc)."""
-        for r in rows:
-            vals = [r.get(c) for c in CARBON_COLS]
-            if self.snow:
-                vals = [TS(v) if c in ("interval_utc", "revision_ts", "updated_at") else v for c, v in zip(CARBON_COLS, vals)]
-                self.execute(
-                    f"""MERGE INTO {self._t('carbon_interval')} t USING (SELECT %s INTERVAL_UTC,%s CI,%s TOTAL_MW,%s RENEWABLE_SHARE,
-                        %s WIND_MW,%s SOLAR_MW,%s REVISION_TS,%s UPDATED_AT) s ON t.INTERVAL_UTC=s.INTERVAL_UTC
-                        WHEN MATCHED THEN UPDATE SET CI=s.CI,TOTAL_MW=s.TOTAL_MW,RENEWABLE_SHARE=s.RENEWABLE_SHARE,
-                        WIND_MW=s.WIND_MW,SOLAR_MW=s.SOLAR_MW,REVISION_TS=s.REVISION_TS,UPDATED_AT=s.UPDATED_AT
-                        WHEN NOT MATCHED THEN INSERT VALUES (s.INTERVAL_UTC,s.CI,s.TOTAL_MW,s.RENEWABLE_SHARE,s.WIND_MW,s.SOLAR_MW,
-                        s.REVISION_TS,s.UPDATED_AT)""", vals)
-            else:
+        """Idempotent: a revised interval replaces the earlier row (matched on interval_utc).
+        Snowflake: ONE multi-row insert into a temp table + ONE merge per batch (a MERGE per row was far too slow)."""
+        if not rows:
+            return
+        if not self.snow:
+            for r in rows:
+                vals = [r.get(c) for c in CARBON_COLS]
                 self.execute(f"INSERT OR REPLACE INTO raw_carbon_interval VALUES ({','.join('?'*len(CARBON_COLS))})", vals)
+            return
+        cur = self.conn.cursor()
+        cur.execute("CREATE OR REPLACE TEMPORARY TABLE RAW.CARBON_STAGE LIKE RAW.CARBON_INTERVAL")
+        data = [tuple(TS(r.get(c)) if c in ("interval_utc", "revision_ts", "updated_at") else r.get(c) for c in CARBON_COLS)
+                for r in rows]
+        cur.executemany("INSERT INTO RAW.CARBON_STAGE VALUES (%s,%s,%s,%s,%s,%s,%s,%s)", data)
+        cur.execute("""MERGE INTO RAW.CARBON_INTERVAL t
+            USING (SELECT * FROM RAW.CARBON_STAGE
+                   QUALIFY ROW_NUMBER() OVER (PARTITION BY INTERVAL_UTC ORDER BY REVISION_TS DESC) = 1) s
+            ON t.INTERVAL_UTC = s.INTERVAL_UTC
+            WHEN MATCHED THEN UPDATE SET CI=s.CI, TOTAL_MW=s.TOTAL_MW, RENEWABLE_SHARE=s.RENEWABLE_SHARE,
+                 WIND_MW=s.WIND_MW, SOLAR_MW=s.SOLAR_MW, REVISION_TS=s.REVISION_TS, UPDATED_AT=s.UPDATED_AT
+            WHEN NOT MATCHED THEN INSERT (INTERVAL_UTC, CI, TOTAL_MW, RENEWABLE_SHARE, WIND_MW, SOLAR_MW, REVISION_TS, UPDATED_AT)
+                 VALUES (s.INTERVAL_UTC, s.CI, s.TOTAL_MW, s.RENEWABLE_SHARE, s.WIND_MW, s.SOLAR_MW, s.REVISION_TS, s.UPDATED_AT)""")
 
     def insert_raw(self, name, rows):
         """Bulk-append JSON documents to a payload-only raw table. Snowflake: PUT to the table stage + COPY INTO
