@@ -1,0 +1,11 @@
+.env
+data/*.db
+data/*.json
+__pycache__/
+*.pyc
+.pytest_cache/
+dbt/target/
+dbt/logs/
+/tmp
+venv/
+.DS_Store

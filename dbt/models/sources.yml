@@ -1,0 +1,13 @@
+version: 2
+sources:
+  - name: raw
+    database: CARBON
+    schema: RAW
+    tables:
+      - name: caiso_fuelmix
+      - name: caiso_demand
+      - name: eia_fuel
+      - name: nws
+      - name: carbon_interval
+      - name: forecast
+      - name: job_run

@@ -1,0 +1,14 @@
+fuel,emission_factor_kg_per_mwh,source_note
+Solar,0,zero direct emissions
+Wind,0,zero direct emissions
+Geothermal,0,placeholder - replace with eGRID value
+Small hydro,0,zero direct emissions
+Large hydro,0,zero direct emissions
+Nuclear,0,zero direct emissions
+Biomass,0,biogenic CO2 treated as zero
+Biogas,0,biogenic CO2 treated as zero
+Natural Gas,411,placeholder - replace with eGRID value
+Coal,995,placeholder - replace with eGRID value
+Other,400,placeholder - replace with eGRID value
+Imports,428,CARB default for unspecified power
+Batteries,0,discharge only

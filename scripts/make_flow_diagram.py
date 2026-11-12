@@ -1,0 +1,31 @@
+"""Regenerates docs/flow_diagram.png (rubric: flow schematic in report and slides).  python scripts/make_flow_diagram.py"""
+import matplotlib; matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from matplotlib.patches import FancyBboxPatch
+fig, ax = plt.subplots(figsize=(13, 6)); ax.set_xlim(0, 142); ax.set_ylim(0, 66); ax.axis("off")
+C = dict(src="#f4c7c3", kafka="#fde7a9", spark="#d9d2e9", store="#cfe2f3", out="#d9ead3", algo="#fff2cc")
+def box(x, y, w, h, title, sub, c, fs=9):
+    ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.2,rounding_size=1.2", fc=c, ec="#555", lw=1))
+    ax.text(x + w/2, y + h - 3, title, ha="center", va="top", fontsize=fs, weight="bold", linespacing=1.3)
+    ax.text(x + w/2, y + h/2 - 1, sub, ha="center", va="top", fontsize=7.3, color="#333", linespacing=1.4)
+def arrow(a, b, label=None, dx=0.8, dy=1.2):
+    ax.annotate("", xy=b, xytext=a, arrowprops=dict(arrowstyle="-|>", color="#444", lw=1.3))
+    if label: ax.text((a[0]+b[0])/2+dx, (a[1]+b[1])/2+dy, label, fontsize=7.5, color="#333", style="italic")
+box(1, 44, 20, 14, "CAISO Outlook", "fuel mix + demand\nevery 5 min", C["src"])
+box(1, 24, 20, 14, "EIA-930", "all U.S. balancing\nauthorities, hourly", C["src"])
+box(1, 4, 20, 14, "NWS + CAISO OASIS", "weather + day-ahead\nforecasts, hourly", C["src"], 8.3)
+box(25, 4, 20, 54, "Python producers", "UTC conversion\npagination + retries\n\nBloom filter:\nnew / revised / duplicate", C["algo"])
+box(49, 4, 14, 54, "Kafka", "one topic\nper feed\n\ndurable\nreplay log", C["kafka"])
+box(67, 18, 20, 26, "Spark Structured\nStreaming", "5-min windows\n30-min watermark\ncarbon intensity\nDGIM + reservoir", C["spark"])
+box(92, 46, 20, 14, "Redis live cache", "current intensity\n24-hour ranking", C["store"])
+box(92, 25, 20, 14, "Forecasts", "persistence | net-load\nLSH analog days", C["algo"])
+box(92, 4, 20, 14, "Snowflake + dbt", "raw > staging > marts\nstar schema, SCD2", C["store"])
+box(117, 46, 23, 14, "Airflow scheduler", "sensor reads Redis,\nruns jobs in clean hours", C["out"])
+box(117, 6, 23, 26, "Dashboard", "live intensity\n24-hour ranking\nhistory, carbon saved", C["out"])
+for y in (51, 31, 11): arrow((21, y), (25, y))
+arrow((45, 31), (49, 31)); arrow((63, 31), (67, 31))
+arrow((87, 40), (92, 52), "live", dx=-3.5, dy=-1); arrow((87, 22), (92, 12), "history", dx=-8, dy=-1)
+arrow((102, 18), (102, 25)); arrow((102, 39), (102, 46)); ax.text(103, 42, "ranked hours", fontsize=7.5, style="italic")
+arrow((112, 53), (117, 53)); arrow((112, 48), (122, 32)); arrow((112, 11), (117, 11))
+ax.text(71, 63, "One stream feeds both a live Redis signal and the Snowflake history", fontsize=12.5, weight="bold", ha="center")
+plt.savefig("docs/flow_diagram.png", dpi=220, bbox_inches="tight")

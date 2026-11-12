@@ -1,0 +1,19 @@
+version: 2
+models:
+  - name: stg_caiso_fuelmix
+    columns:
+      - {name: interval_utc, tests: [not_null]}
+      - {name: fuel, tests: [not_null]}
+    tests:
+      - unique_interval_fuel
+  - name: stg_eia_fuel
+    columns:
+      - {name: period_utc, tests: [not_null]}
+      - {name: balancing_authority, tests: [not_null]}
+  - name: stg_carbon_interval
+    columns:
+      - {name: interval_utc, tests: [unique, not_null]}
+      - name: carbon_intensity_kg_per_mwh
+        tests:
+          - not_null
+          - plausible_intensity

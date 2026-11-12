@@ -1,0 +1,125 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{cite,amsmath,graphicx,booktabs,xcolor,url,hyperref,siunitx}
+\newcommand{\TODO}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}   % search for TODO before submitting; remove the macro colour at the end
+% Shows the figure if the file exists, otherwise a visible placeholder (so the paper always compiles).
+\newcommand{\fig}[3]{\IfFileExists{figures/#1}{\includegraphics[width=#2\linewidth]{figures/#1}}{\fbox{\parbox{#2\linewidth}{\centering\TODO{add figures/\detokenize{#1}: #3}}}}}
+
+\begin{document}
+\title{Real-Time California Grid Carbon Pipeline:\\Open, Campus-Scale Carbon-Aware Scheduling with Kafka, Spark Structured Streaming, Redis and Snowflake}
+\author{\IEEEauthorblockN{Sayli Suryakant Bhongle, Karishma Routhu, Shashidhar Kumar Chintagunta, Vamsi Krishna Bethapudi}
+\IEEEauthorblockA{Department of Applied Data Science, San Jos\'e State University, San Jos\'e, CA, USA\\
+\{firstname.lastname\}@sjsu.edu}}
+\maketitle
+
+\begin{abstract}
+The carbon intensity of a kilowatt-hour in California changes several-fold within a day: solar pushes it low around noon, and gas plants raise it in the evening. Most campus loads (EV charging, research computing, scheduled lab equipment) ignore this. We present an open pipeline built only on public data that (i) ingests CAISO five-minute fuel-mix data, EIA-930 hourly data for every U.S.\ balancing authority, and NWS weather forecasts through Kafka; (ii) computes average carbon intensity with Spark Structured Streaming using event-time windows and watermarks that absorb CAISO's data revisions; (iii) serves a live signal and a ranked 24-hour outlook from Redis while keeping the full history in a Snowflake star schema built with dbt; and (iv) drives an Airflow sensor that delays flexible jobs into clean hours. Streaming algorithms (Bloom filter, DGIM, reservoir sampling), locality-sensitive hashing for analog-day forecasting, and $k$-anonymity with differential privacy for load data are integrated into the pipeline. \TODO{one sentence with the headline results: median latency, accuracy vs.\ CAISO, forecast MAE, kg CO$_2$ avoided}.
+\end{abstract}
+\begin{IEEEkeywords}
+carbon-aware computing, stream processing, Spark Structured Streaming, Kafka, data warehouse, CAISO
+\end{IEEEkeywords}
+
+\section{Introduction}
+California's grid regularly produces more solar at midday than it can use; CAISO curtailed more than 2.7 million MWh of wind and solar in the first five months of 2025 \cite{caiso-curtail}. Evenings, by contrast, still rely heavily on natural gas. The same kWh can therefore be nearly carbon-free at 1\,p.m.\ and much dirtier at 7\,p.m. A campus that moves flexible load into clean hours reduces emissions without using less energy.
+The obstacle is timing and packaging, not data: the signals are spread over CAISO, EIA and weather services, arrive at different speeds and are rarely in a form a facilities manager or job scheduler can act on.
+
+\textbf{Contributions.} (1) An end-to-end open pipeline from public feeds to a live carbon signal and a historical warehouse; (2) handling of CAISO revisions and time-zone/DST differences with watermarks, idempotent merges and UTC normalisation; (3) three explainable day-ahead forecasters, including an LSH analog-day method; (4) a carbon-aware Airflow sensor and a measured savings study; (5) privacy-preserving release of load data. Code: \TODO{public GitHub URL}.
+
+\section{Related Work}
+\subsection{Carbon-aware computing}
+Radovanovi\'c et al.\ describe Google's use of grid carbon-intensity forecasts to shift flexible data-centre load \cite{radovanovic}. Wiesner et al.\ show by simulation that postponing flexible jobs by a few hours substantially reduces emissions, most on solar-heavy grids \cite{wiesner}. Acun et al.\ study how renewable supply and storage choices shape data-centre carbon \cite{acun}, and Sukprasert et al.\ analyse the limits of temporal and spatial shifting \cite{sukprasert}. These works target hyperscale operators; we target an open, small-scale deployment.
+\subsection{Measuring and forecasting grid emissions}
+Siler-Evans et al.\ estimate marginal emission factors for U.S.\ regions and show they differ from averages \cite{silerevans}; Callaway et al.\ show the value of renewables and demand response depends on when and where they act \cite{callaway}. We report \emph{average} intensity and discuss the limitation in Section~\ref{sec:limits}. CarbonCast forecasts multi-day grid carbon intensity with machine learning \cite{carboncast}; we deliberately use simpler, explainable methods and compare them to persistence.
+Commercial services (WattTime, Electricity Maps) sell carbon signals with mostly closed methods.
+\subsection{Stream processing}
+Kafka provides a durable log for high-volume feeds \cite{kreps}. The Dataflow model \cite{akidau} and Structured Streaming \cite{armbrust} formalise event-time windows and watermarks for late data; D-Streams \cite{zaharia} introduced micro-batch streaming on Spark. Kleppmann discusses the trade-offs of joining streaming and batch layers \cite{kleppmann}.
+\subsection{Streaming algorithms, hashing and privacy}
+Bloom filters give constant-space approximate set membership \cite{bloom}; DGIM counts 1-bits in a sliding window in $O(\log^2 N)$ space \cite{dgim}; reservoir sampling maintains a uniform sample of an unbounded stream \cite{vitter}. Random-hyperplane LSH \cite{charikar,indyk} supports sub-linear similar-item retrieval. $k$-anonymity \cite{sweeney} and differential privacy \cite{dwork} limit re-identification from released data.
+\subsection{Warehouse design}
+We follow dimensional modelling practice \cite{kimball} with a Type-2 slowly changing dimension for emission factors.
+
+\section{System Design}
+\begin{figure*}[t]\centering\fig{flow_diagram.png}{0.95}{flow schematic}
+\caption{Architecture. One stream feeds both the live Redis signal and the Snowflake history.}\label{fig:flow}\end{figure*}
+\subsection{Data sources}
+CAISO Today's Outlook provides generation by fuel and demand every five minutes; EIA-930 provides hourly generation by fuel for every balancing authority; NWS provides hourly temperature and sky-cover forecasts; CAISO OASIS provides day-ahead demand and wind/solar forecasts; EPA eGRID and CARB provide emission factors. We loaded \num{78624} CAISO five-minute intervals (about \num{940000} fuel-level rows) and about \num{426000} EIA-930 hourly records covering 1 January--30 September 2026.
+\subsection{Carbon-intensity calculation}
+For interval $t$ with generation $G_{f,t}$ (MW) and emission factor $EF_f$ (kg\,CO$_2$/MWh),
+\begin{equation}
+CI_t=\frac{\sum_f \max(G_{f,t},0)\,EF_f}{\sum_f \max(G_{f,t},0)}.
+\end{equation}
+Imports use CARB's unspecified-power default (0.428\,t/MWh). CAISO reports negative battery output while charging; charging is load, so negative values are clipped to zero and removed from the denominator. Biogenic CO$_2$ is treated as zero \TODO{state the eGRID year and factor table you used}.
+\subsection{Ingestion and time handling}
+One Kafka topic per feed. CAISO publishes Pacific wall-clock time (with daylight saving) and EIA publishes UTC, so all timestamps are converted to UTC at ingestion; the repeated 01:00--02:00 hour on the autumn change is disambiguated by detecting time moving backwards. EIA returns at most 5000 rows per request, so the backfill pages each month by offset.
+\subsection{Streaming layer}
+Spark Structured Streaming reads Kafka, computes $CI_t$ on five-minute tumbling event-time windows, and keeps the record with the greatest revision timestamp in each window under a 30-minute watermark, so a CAISO revision replaces the first publication. Micro-batches are written to Redis (latest interval only) and merged into Snowflake with a keyed \texttt{MERGE}, making the sink idempotent.
+\subsection{Streaming algorithms}
+\emph{Bloom filter.} The producer re-reads the whole day file every five minutes. Two Bloom filters (interval keys; interval+content hash) classify each interval as new, revised or duplicate and suppress duplicates, using constant memory ($m$ bits, $k$ hashes; false-positive target 0.1\%). \emph{DGIM.} We count intervals above \SI{250}{kg/MWh} in the last 288 (24\,h) using DGIM buckets; the count is shown on the dashboard. \emph{Reservoir sampling.} A 500-item uniform sample of intervals supports spot checks without storing the stream.
+\subsection{Warehouse}
+Snowflake holds raw, staging and mart layers built with dbt: \texttt{fact\_grid\_interval}, \texttt{fact\_carbon\_intensity}, \texttt{fact\_ba\_hourly}, \texttt{fact\_forecast}, \texttt{fact\_job\_run}, and dimensions for fuel (SCD Type~2 via a dbt snapshot over the eGRID seed), time, balancing authority, forecast method and job. dbt tests cover uniqueness, non-null keys and a plausible-range check on intensity.
+\subsection{Forecasting}
+Persistence: tomorrow's hour equals today's. Net-load: the day-ahead demand forecast minus the wind and solar forecast gives net load; the forecast is the mean intensity of the $k=15$ historical hours with the same Pacific hour and the nearest net load. LSH analog days: 24-hour net-load profiles are z-normalised and hashed with random hyperplanes (6 bits, 8 tables); the forecast is the mean intensity profile of the 7 nearest retrieved days.
+\subsection{Carbon-aware scheduling}
+An Airflow sensor reads the Redis ranking and releases a job when the current hour is among the three cleanest hours of the job's 12-hour window, or when the window is about to close (so work is never starved). Each run is logged with the intensity at run time, the intensity at the planned time, and kg\,CO$_2$ avoided.
+\subsection{Privacy}
+Because campus charger data was unavailable we simulate EV sessions, but the release path is real: direct identifiers are dropped, arrival time and energy are generalised, records in quasi-identifier groups smaller than $k=5$ are suppressed, and hourly per-building totals receive Laplace noise ($\varepsilon=1$, per-session clip 40\,kWh).
+
+\section{Evaluation}
+\subsection{Setup}
+\TODO{machine specs, Docker resource limits, Spark local mode, date range of each experiment}.
+\subsection{Latency}
+We sample the Redis value and measure the lag between the end of the interval and the time Redis is updated (an upper bound on publish-to-Redis latency). Target: under 10\,min. Result: \TODO{n, median, p95 from eval/latency\_test.py}.
+\subsection{Accuracy versus CAISO}
+\begin{table}[t]\centering\caption{Accuracy of computed CO$_2$ against CAISO's published estimate.}
+\begin{tabular}{lcc}\toprule Period & MAPE & Bias\\\midrule \TODO{Sep 2026} & \TODO{\%} & \TODO{\%}\\\bottomrule\end{tabular}\end{table}
+Target: within 10\% on average. \TODO{state whether met; if not, explain the gap, e.g. factor choices, imports, units}.
+\subsection{Late and revised data}
+\TODO{number of revised intervals observed (Bloom filter counters), share merged into the correct window = target 100\%}.
+\subsection{Forecast quality}
+\begin{table}[t]\centering\caption{Next-day hourly intensity forecasts (backtest).}
+\begin{tabular}{lccc}\toprule Method & Days & MAE (kg/MWh) & Top-4 overlap\\\midrule
+Persistence & \TODO{} & \TODO{} & \TODO{}\\ Net-load & \TODO{} & \TODO{} & \TODO{}\\ LSH analog days & \TODO{} & \TODO{} & \TODO{}\\\bottomrule\end{tabular}\end{table}
+State explicitly which net-load inputs were used (OASIS day-ahead forecasts, or realised net load plus noise in the backtest).
+\subsection{Carbon savings}
+\begin{figure}[t]\centering\fig{ev_savings.png}{0.95}{from eval/savings\_study.py on real history}\caption{Simulated EV charging: charge-on-arrival versus carbon-aware.}\end{figure}
+\TODO{kg and \% saved for simulated EV; kg avoided by logged Airflow runs; sensitivity to window length}.
+\subsection{Limitations}\label{sec:limits}
+Average intensity is not marginal intensity; shifting load can change which plants respond \cite{silerevans}. Campus meter data was simulated. CAISO feeds can be delayed or revised. \TODO{add any limits you observed}.
+
+\section{Lessons Learned}
+\TODO{3--5 honest lessons, e.g.: DST and time-zone alignment between CAISO and EIA; sign conventions for batteries; why single-partition topics keep watermarks correct during backfill; memory limits of running Kafka+Spark+Redis in Docker; idempotent merges for revised data; what you would do differently}.
+
+\section{Conclusion}
+\TODO{3--4 sentences}.
+
+\section*{Team Contributions}
+S.\,Bhongle: Kafka producers, backfill, latency testing. S.\,K.\,Chintagunta: Spark streaming, carbon calculation, watermarks, Redis. V.\,K.\,Bethapudi: Snowflake, dbt models and tests, SCD Type~2. K.\,Routhu: forecasting, Airflow sensor, dashboard, savings analysis. \TODO{adjust to what actually happened}.
+
+\section*{Generative AI Disclosure}
+\TODO{list every tool used (ChatGPT for the status report, Claude for proposal topic/tools and for code scaffolding), what for, and attach the certificate, per course policy}.
+
+\begin{thebibliography}{99}
+% VERIFY every entry (volume/pages/DOI) against the publisher page before submission.
+\bibitem{caiso-curtail} California ISO, ``Wind and solar curtailment report,'' May 30, 2025; ``Key statistics,'' Mar.\ and May 2025.
+\bibitem{radovanovic} A.~Radovanovi\'c \emph{et al.}, ``Carbon-aware computing for datacenters,'' \emph{IEEE Trans.\ Power Syst.}, vol.~38, no.~2, 2023.
+\bibitem{wiesner} P.~Wiesner, I.~Behnke, D.~Scheinert, K.~Gontarska, and L.~Thamsen, ``Let's wait awhile: How temporal workload shifting can reduce carbon emissions in the cloud,'' in \emph{Proc.\ 22nd Int.\ Middleware Conf.}, 2021.
+\bibitem{acun} B.~Acun \emph{et al.}, ``A holistic approach for designing carbon aware datacenters (Carbon Explorer),'' in \emph{Proc.\ ASPLOS}, 2023.
+\bibitem{sukprasert} T.~Sukprasert \emph{et al.}, ``On the limitations of carbon-aware temporal and spatial workload shifting in the cloud,'' in \emph{Proc.\ EuroSys}, 2024.
+\bibitem{silerevans} K.~Siler-Evans, I.~L.~Azevedo, and M.~G.~Morgan, ``Marginal emissions factors for the U.S.\ electricity system,'' \emph{Environ.\ Sci.\ Technol.}, vol.~46, no.~9, pp.~4742--4748, 2012.
+\bibitem{callaway} D.~S.~Callaway, M.~Fowlie, and G.~McCormick, ``Location, location, location: The variable value of renewable energy and demand-side efficiency resources,'' \emph{J.\ Assoc.\ Environ.\ Resour.\ Econ.}, vol.~5, no.~1, pp.~39--75, 2018.
+\bibitem{carboncast} D.~Maji, P.~Shenoy, and R.~K.~Sitaraman, ``CarbonCast: Multi-day forecasting of grid carbon intensity,'' in \emph{Proc.\ BuildSys}, 2022.
+\bibitem{kreps} J.~Kreps, N.~Narkhede, and J.~Rao, ``Kafka: A distributed messaging system for log processing,'' in \emph{Proc.\ NetDB Workshop}, 2011.
+\bibitem{armbrust} M.~Armbrust \emph{et al.}, ``Structured Streaming: A declarative API for real-time applications in Apache Spark,'' in \emph{Proc.\ ACM SIGMOD}, 2018.
+\bibitem{akidau} T.~Akidau \emph{et al.}, ``The Dataflow Model: A practical approach to balancing correctness, latency, and cost in massive-scale, unbounded, out-of-order data processing,'' \emph{Proc.\ VLDB Endow.}, vol.~8, no.~12, 2015.
+\bibitem{zaharia} M.~Zaharia \emph{et al.}, ``Discretized streams: Fault-tolerant streaming computation at scale,'' in \emph{Proc.\ ACM SOSP}, 2013.
+\bibitem{kleppmann} M.~Kleppmann, \emph{Designing Data-Intensive Applications}. O'Reilly Media, 2017.
+\bibitem{kimball} R.~Kimball and M.~Ross, \emph{The Data Warehouse Toolkit}, 3rd ed. Wiley, 2013.
+\bibitem{bloom} B.~H.~Bloom, ``Space/time trade-offs in hash coding with allowable errors,'' \emph{Commun.\ ACM}, vol.~13, no.~7, pp.~422--426, 1970.
+\bibitem{dgim} M.~Datar, A.~Gionis, P.~Indyk, and R.~Motwani, ``Maintaining stream statistics over sliding windows,'' \emph{SIAM J.\ Comput.}, vol.~31, no.~6, pp.~1794--1813, 2002.
+\bibitem{vitter} J.~S.~Vitter, ``Random sampling with a reservoir,'' \emph{ACM Trans.\ Math.\ Softw.}, vol.~11, no.~1, pp.~37--57, 1985.
+\bibitem{indyk} P.~Indyk and R.~Motwani, ``Approximate nearest neighbors: Towards removing the curse of dimensionality,'' in \emph{Proc.\ STOC}, 1998.
+\bibitem{charikar} M.~S.~Charikar, ``Similarity estimation techniques from rounding algorithms,'' in \emph{Proc.\ STOC}, 2002.
+\bibitem{sweeney} L.~Sweeney, ``k-anonymity: A model for protecting privacy,'' \emph{Int.\ J.\ Uncertainty, Fuzziness Knowl.-Based Syst.}, vol.~10, no.~5, pp.~557--570, 2002.
+\bibitem{dwork} C.~Dwork and A.~Roth, ``The algorithmic foundations of differential privacy,'' \emph{Found.\ Trends Theor.\ Comput.\ Sci.}, vol.~9, no.~3--4, pp.~211--407, 2014.
+\end{thebibliography}
+\end{document}

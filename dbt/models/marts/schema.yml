@@ -1,0 +1,15 @@
+version: 2
+models:
+  - name: fact_carbon_intensity
+    columns:
+      - {name: interval_utc, tests: [unique, not_null]}
+      - {name: renewable_share, tests: [not_null]}
+  - name: fact_grid_interval
+    columns:
+      - {name: mw, tests: [not_null]}
+  - name: dim_time
+    columns:
+      - {name: hour_utc, tests: [unique, not_null]}
+  - name: fact_job_run
+    columns:
+      - {name: run_id, tests: [not_null]}
