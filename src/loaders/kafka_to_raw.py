@@ -23,7 +23,7 @@ def main():
     c = Consumer({"bootstrap.servers": config.KAFKA_BOOTSTRAP, "group.id": "raw-loader",
                   "auto.offset.reset": "earliest", "enable.auto.commit": False})
     c.subscribe(list(TOPIC_TO_TABLE))
-    store, buf, idle = Store(), {t: [] for t in TOPIC_TO_TABLE.values()}, 0
+    store, buf, idle, got_any = Store(), {t: [] for t in TOPIC_TO_TABLE.values()}, 0, False
 
     def flush():
         for table, rows in buf.items():
@@ -39,13 +39,13 @@ def main():
             idle += 1
             if idle >= 5 and any(buf.values()):
                 flush()
-            if a.once and idle >= 10:
+            if a.once and idle >= (10 if got_any else 60):
                 flush()
                 break
             continue
         if msg.error():
             continue
-        idle = 0
+        idle, got_any = 0, True
         buf[TOPIC_TO_TABLE[msg.topic()]].append(json.loads(msg.value()))
         if sum(len(v) for v in buf.values()) >= a.batch:
             flush()

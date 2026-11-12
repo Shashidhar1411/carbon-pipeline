@@ -18,14 +18,20 @@ def publish(p, topic: str, key: str, value: dict):
             p.poll(0.5)
 
 
-def http_get(session, url, retries=4, **kw):
-    """GET with exponential backoff; returns the Response or None for 404 (e.g. a day not yet published)."""
+def http_get(session, url, retries=6, timeout=180, **kw):
+    """GET with exponential backoff; returns the Response, or None for 404 (e.g. a day not yet published)."""
+    import requests
     for i in range(retries):
-        r = session.get(url, timeout=60, **kw)
+        try:
+            r = session.get(url, timeout=timeout, **kw)
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+            print(f"  retry {i + 1}/{retries} after {type(e).__name__}", flush=True)
+            time.sleep(min(2 ** i, 30))
+            continue
         if r.status_code == 404:
             return None
         if r.status_code == 429 or r.status_code >= 500:
-            time.sleep(2 ** i)
+            time.sleep(min(2 ** i, 30))
             continue
         r.raise_for_status()
         return r
