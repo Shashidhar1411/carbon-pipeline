@@ -104,8 +104,8 @@ class Store:
         with open(path, "w") as f:
             f.write("\n".join(json.dumps(r) for r in rows))
         cur = self.conn.cursor()
-        cur.execute(f"PUT file://{path} @%{t.split('.')[-1]} AUTO_COMPRESS=TRUE OVERWRITE=TRUE")
-        cur.execute(f"COPY INTO {t} FROM @%{t.split('.')[-1]} FILE_FORMAT=(TYPE=JSON) PURGE=TRUE")
+        cur.execute(f"PUT file://{path} @{config.SF['database']}.RAW.%{t.split('.')[-1]} AUTO_COMPRESS=TRUE OVERWRITE=TRUE")
+        cur.execute(f"COPY INTO {t} FROM @{config.SF['database']}.RAW.%{t.split('.')[-1]} FILE_FORMAT=(TYPE=JSON) PURGE=TRUE")
         os.remove(path)
 
     def insert_forecasts(self, rows):
