@@ -1,8 +1,10 @@
 """Central configuration. Everything is overridable with environment variables (see .env.example)."""
 import os
+from dotenv import load_dotenv
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+load_dotenv(ROOT / ".env", override=True)
 DATA_DIR = Path(os.getenv("DATA_DIR", ROOT / "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
