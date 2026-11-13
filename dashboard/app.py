@@ -1,5 +1,10 @@
 """Streamlit dashboard:  streamlit run dashboard/app.py
 Live intensity + 24-hour ranking come from Redis; history and carbon saved come from the warehouse."""
+import pathlib
+import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))   # let 'src' be imported when streamlit runs this file
+
 import pandas as pd
 import streamlit as st
 
