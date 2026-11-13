@@ -80,7 +80,14 @@ def fetch_demand_day(session, d: date):
 
 
 def run_day(session, producer, clf, d: date, stats):
-    for rec in fetch_fuel_day(session, d):
+    fuel = fetch_fuel_day(session, d)
+    limit = iso_utc(now_utc() + timedelta(minutes=10))
+    if any(r["interval_utc"] > limit for r in fuel):
+        # Just after midnight CAISO's 'current' file can still hold the previous day. Read as today's date, its rows land
+        # ~24 h in the future. Publishing them would corrupt the history, so skip this poll and try again later.
+        print(f"{d}: CAISO file has rows from the future (stale 'current' file) - skipping this poll", flush=True)
+        return
+    for rec in fuel:
         status = clf.classify(rec["interval_utc"], json.dumps(rec["fuels"], sort_keys=True))
         stats[status] += 1
         if status == "duplicate":

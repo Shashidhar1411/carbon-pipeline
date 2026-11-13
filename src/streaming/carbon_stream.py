@@ -77,6 +77,12 @@ class BatchSink:
                 json.dump(self.reservoir.items, f)
 
 
+def drop_future(df, minutes=15):
+    """Events stamped in the future are bad data. Left in, they push the watermark ahead and Spark then silently
+    discards every real event until that time arrives."""
+    return df.filter(F.col("event_time") <= F.current_timestamp() + F.expr(f"INTERVAL {minutes} MINUTES"))
+
+
 def latest_per_window(scored):
     """Tumbling 5-minute event-time windows; within a window keep the record with the greatest revision_ts, so a
     CAISO revision replaces the first publication. Works on batch and streaming DataFrames."""
@@ -92,7 +98,8 @@ def build_stream(spark):
            .option("maxOffsetsPerTrigger", 3000).load())
     parsed = (raw.select(F.from_json(F.col("value").cast("string"), SCHEMA).alias("m")).select("m.*")
               .withColumn("event_time", F.to_timestamp("interval_utc")))
-    return latest_per_window(with_intensity(parsed).withWatermark("event_time", config.WATERMARK))
+    scored = drop_future(with_intensity(parsed))
+    return latest_per_window(scored.withWatermark("event_time", config.WATERMARK))
 
 
 def main():
