@@ -41,7 +41,9 @@ if __name__ == "__main__":
                 if vals:
                     theirs[iso_utc(utc)] = sum(vals)
         d += timedelta(days=1)
-    ours = {r["interval_utc"]: r for r in st.query("SELECT interval_utc, ci, total_mw FROM " + st._t("carbon_interval"))}
+    # Snowflake returns datetime objects, SQLite returns text: normalise both to 'YYYY-MM-DDTHH:MM:SSZ'
+    key = lambda x: x if isinstance(x, str) else x.strftime("%Y-%m-%dT%H:%M:%SZ")
+    ours = {key(r["interval_utc"]): r for r in st.query("SELECT interval_utc, ci, total_mw FROM " + st._t("carbon_interval"))}
     scale = 1 / 12 if a.units == "tons_per_hour" else 1      # tons/h -> tons per 5 min
     recs = []
     for k, v in theirs.items():
