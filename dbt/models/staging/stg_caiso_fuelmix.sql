@@ -7,6 +7,7 @@ with src as (
 ),
 latest as (
     select * from src
+    where interval_utc <= dateadd(minute, 10, sysdate())   -- never keep rows stamped in the future (stale-file bug)
     qualify row_number() over (partition by interval_utc order by revision_ts desc) = 1
 )
 select interval_utc, f.key::string as fuel, f.value::float as mw, revision_ts
