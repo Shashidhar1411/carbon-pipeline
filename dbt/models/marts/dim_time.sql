@@ -1,5 +1,8 @@
-with hours as (
-    select dateadd(hour, seq4(), '2026-01-01'::timestamp_ntz) as hour_utc from table(generator(rowcount => 24 * 800))
+with n as (
+    select row_number() over (order by seq4()) - 1 as i from table(generator(rowcount => 24 * 800))
+),
+hours as (
+    select dateadd(hour, i, '2026-01-01'::timestamp_ntz) as hour_utc from n
 )
 select hour_utc,
        convert_timezone('UTC', 'America/Los_Angeles', hour_utc) as hour_pt,

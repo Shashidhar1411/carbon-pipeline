@@ -1,8 +1,8 @@
 -- one row per interval per fuel; latest revision wins
 with src as (
-    select payload:interval_utc::timestamp_ntz as interval_utc,
-           payload:revision_ts::timestamp_ntz  as revision_ts,
-           payload:fuels                       as fuels
+    select {{ iso_ts('payload:interval_utc') }} as interval_utc,
+           {{ iso_ts('payload:revision_ts') }}  as revision_ts,
+           payload:fuels                        as fuels
     from {{ source('raw', 'caiso_fuelmix') }}
 ),
 latest as (
