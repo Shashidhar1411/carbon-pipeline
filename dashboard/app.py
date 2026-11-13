@@ -36,9 +36,10 @@ def load_jobs():
 r = redis_io.client()
 try:
     cur = redis_io.current(r)
-    rank = redis_io.cleanest(r, 24)
+    rank = redis_io.cleanest(r, 24)                            # only hours that have not passed yet
+    meta = redis_io.ranking_meta(r)
 except Exception as e:                                         # Redis down -> still show history
-    cur, rank = {}, []
+    cur, rank, meta = {}, [], {}
     st.warning(f"Redis not reachable ({e}); showing warehouse data only.")
 
 c1, c2, c3, c4 = st.columns(4)
@@ -54,13 +55,18 @@ else:
 left, right = st.columns(2)
 with left:
     st.subheader("Next 24 hours, cleanest first")
+    if meta.get("issued_at"):
+        issued = pd.Timestamp(meta["issued_at"])
+        st.caption(f"Forecast issued {issued.tz_convert('America/Los_Angeles').strftime('%a %H:%M')} PT | method: {meta.get('method')} | {meta.get('inputs')}")
+        if (pd.Timestamp.now(tz="UTC") - issued).total_seconds() > 2 * 3600:
+            st.warning("This forecast is more than 2 hours old. Start the hourly loop: python -m src.forecasting.run_forecast --loop --primary lsh_analog")
     if rank:
         df = pd.DataFrame(rank, columns=["hour_utc", "forecast_kg_per_mwh"])
         df["hour_pt"] = pd.to_datetime(df["hour_utc"]).dt.tz_convert("America/Los_Angeles").dt.strftime("%a %H:%M")
         st.dataframe(df[["hour_pt", "forecast_kg_per_mwh"]].round(0), hide_index=True, width="stretch")
         st.bar_chart(df.sort_values("hour_utc").set_index("hour_pt")["forecast_kg_per_mwh"])
     else:
-        st.info("Ranking not published yet (run src.forecasting.run_forecast).")
+        st.info("No upcoming hours in the ranking - it is out of date or not published yet (run src.forecasting.run_forecast --loop).")
 with right:
     st.subheader("Typical day (average by Pacific hour)")
     h = load_hourly()

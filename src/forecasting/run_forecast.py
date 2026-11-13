@@ -31,7 +31,9 @@ def issue(store, r, primary="net_load"):
     store.insert_forecasts([{"issued_at": issued, "target_hour": iso_utc(t), "method": m, "forecast_ci": v}
                             for m, d in fc.items() for t, v in d.items()])
     chosen = fc[primary] or fc["persistence"]
-    redis_io.set_ranking(r, {iso_utc(t): v for t, v in chosen.items()})
+    used = primary if fc[primary] else "persistence"
+    redis_io.set_ranking(r, {iso_utc(t): v for t, v in chosen.items()},
+                         {"issued_at": issued, "method": used, "inputs": source})
     print(f"{issued}: net-load inputs = {source}; cleanest hours:",
           [(iso_utc(t), round(chosen[t])) for t in methods.top_hours(chosen)])
 

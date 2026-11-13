@@ -18,6 +18,7 @@ TOPIC_NWS = "nws.forecast"
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 KEY_CURRENT = "carbon:current"
+KEY_RANKING_META = "carbon:ranking_meta"   # hash: issued_at, method, inputs
 KEY_RANKING = "carbon:ranking"      # sorted set: member = hour (UTC ISO), score = forecast kg/MWh
 
 # CAISO Today's Outlook (verify these URLs in a browser once; CAISO occasionally reorganises them)
