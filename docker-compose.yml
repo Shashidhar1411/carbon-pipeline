@@ -41,7 +41,8 @@ services:
       AIRFLOW__CORE__DAGS_FOLDER: /opt/project/dags
       REDIS_HOST: redis
       PYTHONPATH: /opt/project
-      _PIP_ADDITIONAL_REQUIREMENTS: "redis pandas snowflake-connector-python"
+      _PIP_ADDITIONAL_REQUIREMENTS: "redis snowflake-connector-python python-dotenv"
+      CARBON_NO_DOTENV: "1"          # use the container's own settings, not the laptop's .env (REDIS_HOST=localhost)
       SNOWFLAKE_ACCOUNT: ${SNOWFLAKE_ACCOUNT:-}
       SNOWFLAKE_USER: ${SNOWFLAKE_USER:-}
       SNOWFLAKE_PASSWORD: ${SNOWFLAKE_PASSWORD:-}
