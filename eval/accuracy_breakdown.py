@@ -7,6 +7,8 @@ MAPE = mean of |ours-caiso|/caiso per interval (unstable when CAISO's total is s
 WAPE = sum|ours-caiso| / sum(caiso): error weighted by how much CO2 there actually was.
 bias = (sum ours - sum caiso) / sum caiso; negative = we compute less CO2 than CAISO.
 """
+import sys
+
 import pandas as pd
 
 from src.common import config
@@ -24,7 +26,7 @@ def table(df, key):
 
 
 if __name__ == "__main__":
-    df = pd.read_csv(config.DATA_DIR / "accuracy_results.csv")
+    df = pd.read_csv(config.DATA_DIR / (sys.argv[1] if len(sys.argv) > 1 else "accuracy_results.csv"))
     df["interval_utc"] = pd.to_datetime(df["interval_utc"], utc=True)
     loc = df["interval_utc"].dt.tz_convert("America/Los_Angeles")
     df["hour"], df["month"] = loc.dt.hour, loc.dt.strftime("%Y-%m")

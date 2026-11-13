@@ -4,12 +4,14 @@ IMPORTANT: the factors below are placeholder values in kg CO2 / MWh. Replace the
 numbers you actually cite (dbt/seeds/egrid_factors.csv holds the same table for the warehouse). Imports use
 the CARB default for unspecified power (0.428 t/MWh).
 """
-EMISSION_FACTORS = {          # kg CO2 per MWh
-    "Solar": 0.0, "Wind": 0.0, "Geothermal": 0.0, "Small hydro": 0.0, "Large hydro": 0.0, "Nuclear": 0.0,
-    "Biomass": 0.0, "Biogas": 0.0,   # biogenic CO2 treated as zero; document this choice in the report
-    "Natural Gas": 411.0, "Coal": 995.0, "Other": 400.0,
-    "Imports": 428.0,                 # CARB default for unspecified imports
-    "Batteries": 0.0,                 # discharge only; see clean_generation()
+EMISSION_FACTORS = {          # kg CO2 per MWh  (version 2: measured from CAISO's own files, see eval/implied_factors.py)
+    "Solar": 0.0, "Wind": 0.0, "Small hydro": 0.0, "Large hydro": 0.0, "Nuclear": 0.0,
+    "Geothermal": 9.0,
+    "Biomass": 442.0, "Biogas": 525.0,   # CAISO counts biogenic CO2; eGRID-style accounting would use 0
+    "Natural Gas": 443.0, "Coal": 995.0,
+    "Other": 0.0,                        # CAISO publishes no CO2 for 'Other'
+    "Imports": 443.0,                    # median CAISO-implied rate for positive imports (CARB default is 428)
+    "Batteries": 0.0,                    # discharge only; see clean_generation()
 }
 RENEWABLES = ("Solar", "Wind", "Geothermal", "Small hydro", "Large hydro", "Biomass", "Biogas")
 

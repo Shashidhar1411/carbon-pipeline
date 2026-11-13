@@ -9,7 +9,8 @@ from src.producers.caiso_producer import _parse_times
 
 def test_ci_basic():
     r = carbon_intensity({"Solar": 600, "Natural Gas": 300, "Imports": 100})
-    assert abs(r["ci"] - (300 * 411 + 100 * 428) / 1000) < 1e-9
+    from src.common.emissions import EMISSION_FACTORS as EF
+    assert abs(r["ci"] - (300 * EF["Natural Gas"] + 100 * EF["Imports"]) / 1000) < 1e-9
     assert abs(r["renewable_share"] - 0.6) < 1e-9
 
 

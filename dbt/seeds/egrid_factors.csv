@@ -1,14 +1,14 @@
 fuel,emission_factor_kg_per_mwh,source_note
 Solar,0,zero direct emissions
 Wind,0,zero direct emissions
-Geothermal,0,placeholder - replace with eGRID value
+Geothermal,9,median implied by CAISO files (v2)
 Small hydro,0,zero direct emissions
 Large hydro,0,zero direct emissions
 Nuclear,0,zero direct emissions
-Biomass,0,biogenic CO2 treated as zero
-Biogas,0,biogenic CO2 treated as zero
-Natural Gas,411,placeholder - replace with eGRID value
-Coal,995,placeholder - replace with eGRID value
-Other,400,placeholder - replace with eGRID value
-Imports,428,CARB default for unspecified power
+Biomass,442,median implied by CAISO files (v2); CAISO counts biogenic CO2
+Biogas,525,median implied by CAISO files (v2); CAISO counts biogenic CO2
+Natural Gas,443,median implied by CAISO files (v2)
+Coal,995,placeholder - no coal generation in the period
+Other,0,CAISO publishes no CO2 for Other
+Imports,443,median implied by CAISO files for positive imports (v2); CARB default is 428
 Batteries,0,discharge only
