@@ -53,4 +53,19 @@ def net_load_forecast(hist: pd.DataFrame, targets):
         ren = {t: by.get(t - pd.Timedelta(hours=24)) for t in targets}
         source = "CAISO day-ahead demand minus wind/solar persistence (OASIS unavailable)"
     nl = {t: demand[t] - ren[t] for t in targets if t in demand and ren.get(t) is not None and not pd.isna(ren[t])}
+    # Hours without a day-ahead number (e.g. tomorrow's hours before CAISO publishes it): net-load persistence,
+    # i.e. the same hour 1, 2 or 7 days earlier. Keeps the ranking complete; the source label says how many.
+    by_nl = hist.set_index("hour_utc")["net_load"]
+    filled = 0
+    for t in targets:
+        if t in nl:
+            continue
+        for lag in (24, 48, 168):
+            v = by_nl.get(t - pd.Timedelta(hours=lag))
+            if v is not None and not pd.isna(v):
+                nl[t] = float(v)
+                filled += 1
+                break
+    if filled:
+        source += f"; {filled} of {len(targets)} hours use net-load persistence"
     return nl, source
