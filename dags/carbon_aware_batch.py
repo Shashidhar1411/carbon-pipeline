@@ -21,14 +21,14 @@ sys.path.append("/opt/project")                                  # repo is mount
 from src.common import config                                    # noqa: E402
 from src.common.store import Store                               # noqa: E402
 from src.serving import redis_io                                 # noqa: E402
-from src.serving.scheduler_logic import decide, iso              # noqa: E402
+from src.serving.scheduler_logic import decide, iso, to_utc     # noqa: E402
 
 
 class CleanWindowSensor(BaseSensorOperator):
     def poke(self, context):
         p = context["params"]
         ranking = redis_io.client().zrange(p["ranking_key"], 0, -1, withscores=True)
-        planned = context["data_interval_end"].astimezone(timezone.utc)
+        planned = to_utc(context["data_interval_end"])
         mode, best = decide(ranking, planned, datetime.now(timezone.utc), int(p["window_hours"]), int(p["top_n"]))
         if mode is None:
             self.log.info("WAITING - this hour is not among the %s cleanest hours of the window; cleanest: %s", p["top_n"], best)
@@ -47,7 +47,7 @@ def log_run(**ctx):
     p = ctx["params"]
     r, store = redis_io.client(), Store()
     now = datetime.now(timezone.utc)
-    planned = ctx["data_interval_end"].astimezone(timezone.utc)
+    planned = to_utc(ctx["data_interval_end"])
     ci_run = store.ci_at(iso(now))                                 # mean intensity of the current hour so far
     if ci_run is None:
         ci_run = float(redis_io.current(r).get("ci") or 0)
