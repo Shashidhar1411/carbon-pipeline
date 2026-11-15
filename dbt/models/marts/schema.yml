@@ -1,6 +1,7 @@
 version: 2
 models:
   - name: fact_carbon_intensity
+    description: "Each row is one 5-minute interval of the California grid. It shows the carbon intensity (kg of CO2 per MWh), the share of renewable power, and time details like the hour of day and whether it is a weekend. It is used to find the cleanest hours of the day."
     columns:
       - {name: interval_utc, tests: [unique, not_null]}
       - {name: renewable_share, tests: [not_null]}
