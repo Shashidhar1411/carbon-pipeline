@@ -1,15 +1,23 @@
 version: 2
 models:
   - name: fact_carbon_intensity
+    description: "Each row is one 5-minute interval of the California grid. It shows the carbon intensity (kg of CO2 per MWh), the share of renewable power, and time details like the hour of day and whether it is a weekend. It is used to find the cleanest hours of the day."
     columns:
       - {name: interval_utc, tests: [unique, not_null]}
       - {name: renewable_share, tests: [not_null]}
+      - name: carbon_intensity_kg_per_mwh
+        tests:
+          - not_null
+          - plausible_intensity
   - name: fact_grid_interval
+    description: "Each row is one fuel in one 5-minute interval, with how many megawatts (MW) it produced. It shows the fuel mix behind each carbon intensity value."
     columns:
       - {name: mw, tests: [not_null]}
   - name: dim_time
+    description: "Calendar table with one row per hour starting 1 January 2026. It gives the Pacific time and date, hour of day, day of week and a weekend flag. Fact tables join to it to compare hours, weekdays and weekends."
     columns:
       - {name: hour_utc, tests: [unique, not_null]}
   - name: fact_job_run
+    description: "Each row is one run of a job held by the carbon-aware scheduler. It records the carbon intensity at the planned time and at the time it actually ran, and the kg of CO2 avoided."
     columns:
       - {name: run_id, tests: [not_null]}
