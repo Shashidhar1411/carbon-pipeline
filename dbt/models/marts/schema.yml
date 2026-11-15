@@ -6,11 +6,14 @@ models:
       - {name: interval_utc, tests: [unique, not_null]}
       - {name: renewable_share, tests: [not_null]}
   - name: fact_grid_interval
+    description: "Each row is one fuel in one 5-minute interval, with how many megawatts (MW) it produced. It shows the fuel mix behind each carbon intensity value."
     columns:
       - {name: mw, tests: [not_null]}
   - name: dim_time
+    description: "Calendar table with one row per hour starting 1 January 2026. It gives the Pacific time and date, hour of day, day of week and a weekend flag. Fact tables join to it to compare hours, weekdays and weekends."
     columns:
       - {name: hour_utc, tests: [unique, not_null]}
   - name: fact_job_run
+    description: "Each row is one run of a job held by the carbon-aware scheduler. It records the carbon intensity at the planned time and at the time it actually ran, and the kg of CO2 avoided."
     columns:
       - {name: run_id, tests: [not_null]}
