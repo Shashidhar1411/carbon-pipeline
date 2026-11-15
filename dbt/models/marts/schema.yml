@@ -5,6 +5,10 @@ models:
     columns:
       - {name: interval_utc, tests: [unique, not_null]}
       - {name: renewable_share, tests: [not_null]}
+      - name: carbon_intensity_kg_per_mwh
+        tests:
+          - not_null
+          - plausible_intensity
   - name: fact_grid_interval
     description: "Each row is one fuel in one 5-minute interval, with how many megawatts (MW) it produced. It shows the fuel mix behind each carbon intensity value."
     columns:
