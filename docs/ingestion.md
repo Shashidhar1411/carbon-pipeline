@@ -136,6 +136,18 @@ Why duplicates are high: in live mode, the producer downloads the entire day's f
 
 
 
+## 7. Weather feed run notes
+
+**When:** 15 November 2026 at 11:03 PM Pacific Time (the terminal shows `2026-11-16T07:03:27 UTC`).
+
+**Result:** The producer printed "published 193 weather hours." It received and published 193 hourly weather forecast records to the `nws.forecast` topic, covering about 8 days.
+
+**Stopping it:** I pressed Ctrl + C while the program was waiting in `time.sleep(3600)` before its next hourly fetch. The `KeyboardInterrupt` traceback is expected, because it only shows that the program was stopped manually.
+
+**Problem noticed:** The shell printed `.env:2: number expected`, which means line 2 of the `.env` file has a formatting problem. It did not stop the run. The fix is to check that line and put the value in quotes if it contains spaces or brackets.
+
+
+
 
 
 
