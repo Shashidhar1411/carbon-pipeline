@@ -106,6 +106,23 @@ Each topic has only one partition so that messages stay in time order. Spark rea
 
 
 
+## 5. Reading the producer output
+
+At the end of each run, the CAISO producer prints three counts, for example:
+
+    new 437, revised 421, duplicate 46195
+
+- **New:** an interval the producer has never seen before. It is sent to Kafka.
+- **Revised:** an interval that was already seen but now has different values. It is sent to Kafka again because CAISO corrected the data.
+- **Duplicate:** an interval that was already seen with exactly the same values. It is dropped and not sent to Kafka.
+
+The producer uses a Bloom filter to check quickly whether it has seen an interval before, without storing every record.
+
+Why duplicates are high: in live mode, the producer downloads the entire day's file every 5 minutes. Intervals that were already processed appear again with the same values, so many duplicates are detected and dropped. Only the newest intervals are counted as new.
+
+
+
+
 
 
 
