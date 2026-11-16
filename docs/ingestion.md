@@ -122,7 +122,14 @@ Why duplicates are high: in live mode, the producer downloads the entire day's f
 
 
 
+## 6. Common problems
 
+| Problem | What happened | Fix |
+| --- | --- | --- |
+| Docker not running | The producer could not connect to Kafka because Docker was not started, and Docker took some time to load. | Start Docker Desktop first, wait until it is fully running, then run `docker compose up -d kafka kafka-ui redis` before starting any producer. |
+| Running out of disk space | The C drive did not have enough free space for the tools and Docker images. | Free up space on C, or install tools and keep the project on another drive (we used the E drive). |
+| Missing `.env` file | The producer could not find the API key and settings. | Check that `.env` exists in the project folder (copied from `.env.example`) and contains `EIA_API_KEY` and `NWS_USER_AGENT`. |
+| EIA backfill too large | A full backfill for every balancing authority takes a long time and creates millions of rows. | Test first with a smaller run, for example only California (`--respondent CISO`) or a shorter date range. |
 
 
 
