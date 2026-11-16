@@ -2,6 +2,7 @@
 pipeline can be developed and unit-tested without credentials. dbt only runs against Snowflake."""
 import json
 import sqlite3
+import os
 from . import config
 
 CARBON_COLS = ["interval_utc", "ci", "total_mw", "renewable_share", "wind_mw", "solar_mw", "revision_ts", "updated_at"]
@@ -40,10 +41,13 @@ class Store:
             kw = {k: v for k, v in config.SF.items() if v}
             self.conn = snowflake.connector.connect(**kw)
             cur = self.conn.cursor()
-            cur.execute(f"CREATE DATABASE IF NOT EXISTS {config.SF['database']}")
+            readonly = os.environ.get("SNOWFLAKE_READONLY") == "1"
+            if not readonly:
+                cur.execute(f"CREATE DATABASE IF NOT EXISTS {config.SF['database']}")
             cur.execute(f"USE DATABASE {config.SF['database']}")
-            for stmt in SNOWFLAKE_DDL:
-                cur.execute(stmt)
+            if not readonly:
+                for stmt in SNOWFLAKE_DDL:
+                    cur.execute(stmt)
         else:
             self.conn = sqlite3.connect(config.SQLITE_PATH)
             self.conn.executescript(SQLITE_DDL)
