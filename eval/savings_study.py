@@ -13,16 +13,23 @@ from src.forecasting import methods
 from src.privacy import anonymize
 from src.simulation import ev
 
+
+def run_study(sessions, ci_days, cap_hours=None):
+    """Return a COPY of sessions with baseline_kg and shifted_kg added.
+    cap_hours: longest allowed parking window in hours (None = keep the simulated windows as they are)."""
+    out = sessions.copy()
+    if cap_hours is not None:
+        out["depart_hour"] = out["depart_hour"].clip(upper=out["arrive_hour"] + cap_hours)
+    out[["baseline_kg", "shifted_kg"]] = [ev.session_emissions(ci_days[s.date.date()], s) for s in out.itertuples()]
+    return out
+
+
 if __name__ == "__main__":
     st = Store()
     hist = methods.prepare(st.hourly())
     ci_days = {d: dict(zip(g["local_hour"], g["ci"])) for d, g in hist.groupby("local_date") if g["local_hour"].nunique() >= 20}
-    sessions = ev.simulate_sessions(sorted(ci_days))
-    rec = []
-    for s in sessions.itertuples():
-        b, c = ev.session_emissions(ci_days[s.date.date()], s)
-        rec.append((b, c))
-    sessions[["baseline_kg", "shifted_kg"]] = rec
+    simulated = ev.simulate_sessions(sorted(ci_days))
+    sessions = run_study(simulated, ci_days)
     tot_b, tot_s = sessions.baseline_kg.sum(), sessions.shifted_kg.sum()
     print(f"EV (simulated): {len(sessions)} sessions, {sessions.energy_kwh.sum():,.0f} kWh | baseline {tot_b:,.1f} kg -> shifted {tot_s:,.1f} kg "
           f"| saved {tot_b - tot_s:,.1f} kg ({(tot_b - tot_s) / tot_b:.1%})")
