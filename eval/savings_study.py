@@ -33,6 +33,15 @@ if __name__ == "__main__":
     tot_b, tot_s = sessions.baseline_kg.sum(), sessions.shifted_kg.sum()
     print(f"EV (simulated): {len(sessions)} sessions, {sessions.energy_kwh.sum():,.0f} kWh | baseline {tot_b:,.1f} kg -> shifted {tot_s:,.1f} kg "
           f"| saved {tot_b - tot_s:,.1f} kg ({(tot_b - tot_s) / tot_b:.1%})")
+        # sensitivity: repeat the study for different maximum parking windows (same simulated cars each time)
+    print("Window sweep (same simulated sessions, parking window capped):")
+    for cap in (3, 6, 12):
+        capped = run_study(simulated, ci_days, cap_hours=cap)
+        usable = capped[capped.baseline_kg > 0]          # sessions whose window had enough hours to charge
+        b, s = usable.baseline_kg.sum(), usable.shifted_kg.sum()
+        pct = (b - s) / b if b else float("nan")
+        print(f"  window <= {cap:>2} h | usable sessions {len(usable):,} of {len(capped):,} | baseline {b:,.1f} kg -> "
+              f"shifted {s:,.1f} kg | saved {b - s:,.1f} kg ({pct:.1%})")
     daily = sessions.groupby("date")[["baseline_kg", "shifted_kg"]].sum()
     daily.to_csv(config.DATA_DIR / "ev_savings_daily.csv")
     ax = daily.rolling(7).mean().plot(figsize=(7, 3.2)); ax.set_ylabel("kg CO2/day (7-day mean)"); ax.set_title("Simulated EV charging: on-arrival vs carbon-aware")
